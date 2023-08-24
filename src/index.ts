@@ -1,4 +1,4 @@
-import { tileToBBOX, getChildren, bboxToTile, pointToTileFraction } from '@mapbox/tilebelt'
+import { tileToBBOX, getChildren, bboxToTile, pointToTileFraction, getParent } from '@mapbox/tilebelt'
 import sharp from 'sharp'
 import fs from 'node:fs/promises'
 
@@ -76,8 +76,33 @@ export const slice = async (input: string, output_dir: string, _options: Options
   let count = 0
   const total = extractors.length
 
+  const transparentTiles: { [xyz: string]: true } = {}
+  const isAncestorOfOneOfTransparentTiles = (xyz: number[]): boolean => {
+    let current_xyz = xyz
+    do {
+      const [x, y, z] = getParent(current_xyz)
+      if(transparentTiles[`${x}/${y}/${z}`]) {
+        return true
+      } else {
+        current_xyz = [x, y, z]
+      }
+    } while (current_xyz[2] > 0)
+    return false
+  }
+
+  const isWholeTransparent = async (tile: sharp.Sharp): Promise<boolean> => {
+    const data = await tile.clone().raw().toBuffer()
+    return data.every((v) => v === 0)
+  }
+
   for (const { xyz: [x, y, z], ...extractor } of extractors) {
     count ++
+
+    if(isAncestorOfOneOfTransparentTiles([z, x, y])) {
+      verbose && console.log(`[skipped] ${count}/${total} ${output_dir}/${z}/${x}/${y}.png`)
+      continue
+    }
+
     const tile = sharp(canvasBuffer)
 
     tile
@@ -86,10 +111,14 @@ export const slice = async (input: string, output_dir: string, _options: Options
 
     await fs.mkdir(`${output_dir}/${z}`, { recursive: true })
     await fs.mkdir(`${output_dir}/${z}/${x}`, { recursive: true })
-    // TODO: 全て透明な時は保存しない
-    // TODO: また、キャッシュして、この子タイルについては処理をスキップする
-    await tile.toFile(`${output_dir}/${z}/${x}/${y}.png`)
-    verbose && console.log(`[generated] ${count}/${total} ${output_dir}/${z}/${x}/${y}.png`)
+
+    if(await isWholeTransparent(tile)) {
+      transparentTiles[`${x}/${y}/${z}`] = true
+      verbose && console.log(`[skipped] ${count}/${total} ${output_dir}/${z}/${x}/${y}.png`)
+    } else {
+      await tile.toFile(`${output_dir}/${z}/${x}/${y}.png`)
+      verbose && console.log(`[generated] ${count}/${total} ${output_dir}/${z}/${x}/${y}.png`)
+    }
   }
   verbose && console.timeEnd('all')
 }

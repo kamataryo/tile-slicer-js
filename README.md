@@ -9,5 +9,5 @@ $ git clone https://github.com/kamataryo/tile-slicer-js.git
 $ cd tile-slicer-js
 $ yarn
 $ yarn start -h
-$ yarn start sample.png ./tiles --verbose --padding 100
+$ yarn start sample.jpg ./docs/tiles --verbose --padding 100
 ```
