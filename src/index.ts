@@ -1,11 +1,11 @@
-import { getChildren } from '@mapbox/tilebelt'
+import { tileToBBOX, getChildren } from '@mapbox/tilebelt'
 import sharp from 'sharp'
 import fs from 'node:fs/promises'
 
 type Extractor = {  top: number, left: number, width: number, height: number }
 type ExtractorWithXYZ = Extractor & { xyz: number[] }
 
-const listExtractor = (width: number, xyz: number[], extractor: Extractor, { tile_size, verbose }: Required<Options>): ExtractorWithXYZ[] => {
+const listExtractor = (width: number, xyz: number[], extractor: Extractor, { tile_size, verbose }: Omit<Required<Options>, 'bbox' | 'padding'>): ExtractorWithXYZ[] => {
   const results: ExtractorWithXYZ[] = []
   if(width <= tile_size) {
     return results
@@ -32,15 +32,22 @@ const listExtractor = (width: number, xyz: number[], extractor: Extractor, { til
 type Options = {
   tile_size?: number,
   verbose?: boolean,
+  bbox?: number[],
+  padding?: number,
 }
-const defaultOptions: Required<Options> = {
+
+export const defaultOptions: Required<Options> = {
   tile_size: 256,
   verbose: false,
+  bbox: tileToBBOX([0, 0, 0]),
+  padding: 0,
 }
 
 export const slice = async (input: string, output_dir: string, _options: Options = {}) => {
 
-  const { tile_size, verbose } = { ...defaultOptions, ..._options }
+  const { tile_size, verbose, bbox, padding } = { ...defaultOptions, ..._options }
+  const useBbox = bbox.some((val, index) => val !== defaultOptions.bbox[index])
+
   verbose && console.time('all')
 
   const image = sharp(input)
@@ -49,17 +56,21 @@ export const slice = async (input: string, output_dir: string, _options: Options
     throw new Error('Invalid image')
   }
 
-  // TODO: 余白の追加。
   // TODO: bbox がある場合は、含まれる最大のタイルを取得し、
   // - それ以前は単に余白を追加する
   // - それ以降は、最大のタイルの中でいい感じに配置できるように余白を調整して以降の処理を行う
   const width = Math.max(_width, _height)
   const canvasBuffer = await image
+    .png()
     .resize(width, width, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .extend({ top: padding, bottom: padding, left: padding, right: padding, background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .toBuffer()
+
   await fs.mkdir(output_dir, { recursive: true })
 
-  const extractors = listExtractor(width, [0, 0, 0], { top: 0, left: 0, width, height: width }, { tile_size, verbose })
+  const total_width = width + padding * 2
+
+  const extractors = listExtractor(total_width, [0, 0, 0], { top: 0, left: 0, width: total_width, height: total_width }, { tile_size, verbose })
   let count = 0
   const total = extractors.length
 
