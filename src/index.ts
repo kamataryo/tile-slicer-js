@@ -1,4 +1,4 @@
-import { tileToBBOX, getChildren } from '@mapbox/tilebelt'
+import { tileToBBOX, getChildren, bboxToTile, pointToTileFraction } from '@mapbox/tilebelt'
 import sharp from 'sharp'
 import fs from 'node:fs/promises'
 
@@ -32,21 +32,18 @@ const listExtractor = (width: number, xyz: number[], extractor: Extractor, { til
 type Options = {
   tile_size?: number,
   verbose?: boolean,
-  bbox?: number[],
   padding?: number,
 }
 
 export const defaultOptions: Required<Options> = {
   tile_size: 256,
   verbose: false,
-  bbox: tileToBBOX([0, 0, 0]),
   padding: 0,
 }
 
 export const slice = async (input: string, output_dir: string, _options: Options = {}) => {
 
-  const { tile_size, verbose, bbox, padding } = { ...defaultOptions, ..._options }
-  const useBbox = bbox.some((val, index) => val !== defaultOptions.bbox[index])
+  const { tile_size, verbose, padding } = { ...defaultOptions, ..._options }
 
   verbose && console.time('all')
 
@@ -56,9 +53,8 @@ export const slice = async (input: string, output_dir: string, _options: Options
     throw new Error('Invalid image')
   }
 
-  // TODO: bbox がある場合は、含まれる最大のタイルを取得し、
-  // - それ以前は単に余白を追加する
-  // - それ以降は、最大のタイルの中でいい感じに配置できるように余白を調整して以降の処理を行う
+  const initial_bbox = bboxToTile([0,0,0])
+
   const width = Math.max(_width, _height)
   const canvasBuffer = await image
     .png()
@@ -69,15 +65,21 @@ export const slice = async (input: string, output_dir: string, _options: Options
   await fs.mkdir(output_dir, { recursive: true })
 
   const total_width = width + padding * 2
+  const initial_extractor = { top: 0, left: 0, width: total_width, height: total_width }
 
-  const extractors = listExtractor(total_width, [0, 0, 0], { top: 0, left: 0, width: total_width, height: total_width }, { tile_size, verbose })
+  const extractors = listExtractor(
+    total_width,
+    initial_bbox,
+    initial_extractor,
+    { tile_size, verbose },
+  )
   let count = 0
   const total = extractors.length
 
   for (const { xyz: [x, y, z], ...extractor } of extractors) {
     count ++
     const tile = sharp(canvasBuffer)
-    console.log(`${JSON.stringify(extractor)}`)
+
     tile
       .extract(extractor)
       .resize(tile_size, tile_size, { fit: 'contain' })
@@ -85,6 +87,7 @@ export const slice = async (input: string, output_dir: string, _options: Options
     await fs.mkdir(`${output_dir}/${z}`, { recursive: true })
     await fs.mkdir(`${output_dir}/${z}/${x}`, { recursive: true })
     // TODO: 全て透明な時は保存しない
+    // TODO: また、キャッシュして、この子タイルについては処理をスキップする
     await tile.toFile(`${output_dir}/${z}/${x}/${y}.png`)
     verbose && console.log(`[generated] ${count}/${total} ${output_dir}/${z}/${x}/${y}.png`)
   }
