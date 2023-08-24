@@ -1,0 +1,25 @@
+{
+  "name": "tile-slicer-js",
+  "version": "1.0.0",
+  "bin": "dist/bin.js",
+  "main": "dist/index.js",
+  "repository": "git@github.com:kamataryo/tile-slicer-js.git",
+  "author": "kamataryo <6292312+kamataryo@users.noreply.github.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/mapbox__tilebelt": "^1.0.0",
+    "@types/node": "18",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@mapbox/tilebelt": "^1.0.2",
+    "async": "^3.2.4",
+    "commander": "^11.0.0",
+    "sharp": "^0.32.5"
+  },
+  "scripts": {
+    "start": "ts-node src/bin.ts",
+    "build": "tsc"
+  }
+}
