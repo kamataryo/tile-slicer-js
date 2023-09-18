@@ -36,7 +36,7 @@ type Options = {
 }
 
 export const defaultOptions: Required<Options> = {
-  tile_size: 256,
+  tile_size: 512,
   verbose: false,
   padding: 0,
 }
