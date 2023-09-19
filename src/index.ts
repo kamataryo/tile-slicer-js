@@ -5,7 +5,7 @@ import fs from 'node:fs/promises'
 type Extractor = {  top: number, left: number, width: number, height: number }
 type ExtractorWithXYZ = Extractor & { xyz: number[] }
 
-const listExtractor = (width: number, xyz: number[], extractor: Extractor, { tile_size, verbose }: Omit<Required<Options>, 'bbox' | 'padding'>): ExtractorWithXYZ[] => {
+const listExtractor = (width: number, xyz: number[], extractor: Extractor, { tile_size, verbose }: Omit<Required<Options>, 'bbox' | 'padding' | 'baseTileIndexes'>): ExtractorWithXYZ[] => {
   const results: ExtractorWithXYZ[] = []
   if(width <= tile_size) {
     return results
@@ -33,17 +33,28 @@ type Options = {
   tile_size?: number,
   verbose?: boolean,
   padding?: number,
+  baseTileIndexes?: {
+    z?: number,
+    x?: number,
+    y?: number,
+  }
 }
 
-export const defaultOptions: Required<Options> = {
+export const defaultOptions: Required<Options> & Required<{ baseTileIndexes: Options['baseTileIndexes'] }> = {
   tile_size: 512,
   verbose: false,
   padding: 0,
+  baseTileIndexes: { z: 0, x: 0, y: 0 },
 }
 
 export const slice = async (input: string, output_dir: string, _options: Options = {}) => {
 
-  const { tile_size, verbose, padding } = { ...defaultOptions, ..._options }
+  const {
+    tile_size,
+    verbose,
+    padding,
+    baseTileIndexes: { z = 0, x = 0, y = 0 },
+  } = { ...defaultOptions, ..._options }
 
   verbose && console.time('all')
 
@@ -52,9 +63,7 @@ export const slice = async (input: string, output_dir: string, _options: Options
   if(typeof _width !== 'number' || typeof _height !== 'number') {
     throw new Error('Invalid image')
   }
-
-  const initial_bbox = bboxToTile([0,0,0])
-
+  const initial_bbox = [x, y, z]
   const width = Math.max(_width, _height)
   const canvasBuffer = await image
     .png()
